@@ -2,6 +2,10 @@
   "name": "@ryandotzone/wp-sdk",
   "version": "0.1.0",
   "description": "Typed TypeScript SDK for the WordPress REST API, built for headless WordPress.",
+  "author": {
+    "name": "Ryan Bartlett",
+    "url": "https://github.com/ryanzbartlett"
+  },
   "license": "MIT",
   "type": "module",
   "sideEffects": [
