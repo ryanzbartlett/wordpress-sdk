@@ -37,6 +37,9 @@ const DEFAULT_RETRY: Required<RetryOptions> = {
  *
  * The SDK always builds a `Request` before dispatching, so an implementation only ever
  * needs to accept one — `globalThis.fetch` satisfies this, and so does a two-line stub.
+ *
+ * A function passed here is called with no receiver, so pass a bound reference or an arrow
+ * function if the implementation needs its own `this` (native `fetch` does, in browsers).
  */
 export type FetchLike = (input: Request) => Promise<Response>;
 
@@ -199,12 +202,17 @@ export class HttpClient {
   constructor(options: HttpClientOptions) {
     this.baseUrl = normalizeBaseUrl(options.url, options.allowInsecure);
     this.auth = options.auth ? toAuthenticator(options.auth) : undefined;
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
-    if (typeof this.fetchImpl !== "function") {
+    const fetchImpl = options.fetch ?? globalThis.fetch;
+    if (typeof fetchImpl !== "function") {
       throw new WPConfigError(
         "No global fetch available. Pass a fetch implementation via the `fetch` option.",
       );
     }
+    // Bind the receiver. Storing an unbound `globalThis.fetch` on the instance and calling it as
+    // `this.fetchImpl(request)` hands native fetch the HttpClient as its `this`; browsers reject
+    // that with "Illegal invocation", while Node, Bun and undici do not check — so an unbound
+    // reference passes every server-side test and fails only once the bundle reaches a browser.
+    this.fetchImpl = fetchImpl === globalThis.fetch ? fetchImpl.bind(globalThis) : fetchImpl;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.retry = options.retry === false ? null : { ...DEFAULT_RETRY, ...options.retry };
     this.headers = options.headers ?? {};

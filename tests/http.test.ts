@@ -329,3 +329,44 @@ describe("HttpClient errors and retries", () => {
     expect(seen).toEqual(["req:/wp-json/wp/v2/posts", "res:200"]);
   });
 });
+
+describe("fetch receiver", () => {
+  test("calls the global fetch with globalThis as its receiver, not the client", async () => {
+    // Browsers enforce that native fetch is invoked on the window; an unbound
+    // `globalThis.fetch` stored on the instance and called as `this.fetchImpl(request)`
+    // fails there with "Illegal invocation" while passing under Node, Bun and undici.
+    const original = globalThis.fetch;
+    const receivers: unknown[] = [];
+    globalThis.fetch = function (this: unknown) {
+      receivers.push(this);
+      return Promise.resolve(jsonResponse({}));
+    } as unknown as typeof globalThis.fetch;
+
+    try {
+      const client = new HttpClient({ url: BASE });
+      await client.request({ path: "/wp/v2/posts" });
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    expect(receivers).toEqual([globalThis]);
+  });
+
+  test("leaves an injected fetch unbound so it keeps its own receiver", async () => {
+    const injected = {
+      calls: 0,
+      fetchImpl(this: { calls: number }) {
+        this.calls += 1;
+        return Promise.resolve(jsonResponse({}));
+      },
+    };
+
+    const client = new HttpClient({
+      url: BASE,
+      fetch: injected.fetchImpl.bind(injected),
+    });
+
+    await client.request({ path: "/wp/v2/posts" });
+    expect(injected.calls).toBe(1);
+  });
+});
