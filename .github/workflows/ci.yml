@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Lint and format
+        run: bun x @biomejs/biome ci .
+
+      - name: Typecheck (includes the type-level tests in tests/types)
+        run: bun x tsc --noEmit
+
+      - name: Test
+        run: bun test --coverage
+
+      - name: Build
+        run: bun run build
+
+      - name: Validate the published package
+        run: |
+          bun x publint
+          bun pm pack --destination /tmp/pack
+          bun x @arethetypeswrong/cli /tmp/pack/*.tgz
